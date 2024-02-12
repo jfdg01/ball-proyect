@@ -2,6 +2,7 @@ package com.mygdx.game;
 
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.physics.box2d.*;
@@ -25,12 +26,12 @@ public class MyGdxGame extends Game {
 class GameScreen implements Screen {
     SpriteBatch batch;
     World world;
+    Texture ballTexture;
     Box2DDebugRenderer debugRenderer;
     private float accumulator = 0;
     private OrthographicCamera camera;
     private OrthographicCamera hudCamera;
-
-    private Body ballBody;
+    private Body circleBody;
     private Array<Body> ballBodies = new Array<>();
     private int numberOfBalls = 0;
     private Body floorBody;
@@ -43,10 +44,10 @@ class GameScreen implements Screen {
 
     public void initializeCameras() {
         camera = new OrthographicCamera();
-        camera.setToOrtho(false, WORLD_WIDTH, WORLD_HEIGHT); // Use world size in meters
+        camera.setToOrtho(false, Gdx.graphics.getWidth() / PPM, Gdx.graphics.getHeight() / PPM); // Use world size in meters
         camera.update();
 
-        hudCamera = new OrthographicCamera(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        hudCamera = new OrthographicCamera(Gdx.graphics.getWidth() / PPM, Gdx.graphics.getHeight() / PPM);
         hudCamera.position.set(hudCamera.viewportWidth / 2, hudCamera.viewportHeight / 2, 0);
         hudCamera.update();
     }
@@ -75,8 +76,8 @@ class GameScreen implements Screen {
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = circle;
         fixtureDef.density = 0.5f;
-        fixtureDef.friction = 0.1f;
-        fixtureDef.restitution = 1.01f; // Make it bounce
+        fixtureDef.friction = 0.0f;
+        fixtureDef.restitution = 1.001f; // Make it bounce
 
         // Create the fixture on the body
         ballBody.createFixture(fixtureDef);
@@ -84,16 +85,13 @@ class GameScreen implements Screen {
 
         ballBodies.add(ballBody);
         numberOfBalls++;
-        if (this.ballBody == null) {
-            this.ballBody = ballBody;
-        }
 
         // Dispose of the shape
         circle.dispose();
     }
 
     private void createCircle() {
-        float radius = 5f; // Semi-circle radius in meters
+        float radius = CIRCLE_RADIUS; // Radius in meters
         int segments = 360; // Number of segments to approximate the semi-circle
 
         Vector2[] vertices = new Vector2[segments];
@@ -107,23 +105,23 @@ class GameScreen implements Screen {
             );
         }
 
-        // Create the chain shape for the semi-circle
+        // Create the chain shape for the circle
         ChainShape chainShape = new ChainShape();
         chainShape.createChain(vertices);
 
-        // Create a body definition for the static semi-circle
+        // Create a body definition for the static circle
         BodyDef bodyDef = new BodyDef();
         bodyDef.type = BodyDef.BodyType.StaticBody;
-        bodyDef.position.set(4, 3); // Position of the semi-circle's bottom center in the world
+        bodyDef.position.set(4, 3);
 
         // Create the static body in the world
-        Body body = world.createBody(bodyDef);
+        circleBody = world.createBody(bodyDef);
 
         // Attach the chain shape to the body
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = chainShape;
 
-        body.createFixture(fixtureDef);
+        circleBody.createFixture(fixtureDef);
 
         // Remember to dispose of the shape
         chainShape.dispose();
@@ -240,7 +238,7 @@ class GameScreen implements Screen {
         return minLerp + (maxLerp - minLerp) * normalizedSpeed;
     }
 
-    private void resetBallPosition() {
+   /* private void resetBallPosition() {
         if (!ballBody.isAwake())
             ballBody.setAwake(true);
         ballBody.setTransform(4, 3, 0);
@@ -252,7 +250,7 @@ class GameScreen implements Screen {
         ballBody.setTransform(4, 3, 0); // Reset position and angle
         ballBody.setLinearVelocity(0, 0); // Reset velocity
         ballBody.setAngularVelocity(0); // Reset angular velocity
-    }
+    }*/
 
     /**
      * Physics simulation functions
@@ -263,6 +261,9 @@ class GameScreen implements Screen {
         font.setColor(Color.WHITE);
         font.getData().setScale(1);
 
+        // Load the internal asset png into the ballTexture variable
+        ballTexture = new Texture(Gdx.files.internal("ball.png"));
+
         initializeCameras();
 
         Gdx.input.setInputProcessor(inputProcessor);
@@ -271,8 +272,9 @@ class GameScreen implements Screen {
         world = new World(new Vector2(0, -10), true);
         debugRenderer = new Box2DDebugRenderer();
 
+
         createBall();
-        ballBody.setLinearVelocity(0, -50);
+
         createCircle();
     }
 
@@ -311,25 +313,29 @@ class GameScreen implements Screen {
         }*/
 
         camera.update();
-        batch.setProjectionMatrix(camera.combined);
-
         // Clear the screen and render the world
         ScreenUtils.clear(0, 0, 0, 1);
-        debugRenderer.render(world, camera.combined);
-
         batch.setProjectionMatrix(hudCamera.combined);
         batch.begin();
-        float speed = ballBody.getLinearVelocity().len();
-        font.draw(batch, "Speed: " + String.format("%.2f", speed) + " m/s", (float) Gdx.graphics.getWidth() / 2 - 80, Gdx.graphics.getHeight() - 20);
-        font.draw(batch, "Balls: " + numberOfBalls, (float) Gdx.graphics.getWidth() / 2 - 50, Gdx.graphics.getHeight() - 40); // Adjust position as needed
+        int random = (int) (Math.random() * ballBodies.size);
+        float speed = ballBodies.get(random).getLinearVelocity().len();
+        font.draw(batch, "Speed: " + String.format("%.2f", speed) + " m/s", (float) Gdx.graphics.getWidth() / 2, Gdx.graphics.getHeight());
+        font.draw(batch, "Balls: " + numberOfBalls, (float) Gdx.graphics.getWidth() / 2, Gdx.graphics.getHeight() - 20); // Adjust position as needed
         batch.end();
 
-        int resetDepth = -50;
+        batch.begin();
+        batch.setProjectionMatrix(camera.combined);
+        batch.draw(ballTexture, circleBody.getPosition().x * PPM - (CIRCLE_RADIUS * PPM), circleBody.getPosition().y * PPM - (CIRCLE_RADIUS * PPM), CIRCLE_RADIUS * 2 * PPM, CIRCLE_RADIUS * 2 * PPM);
+        batch.end();
+
+/*        int resetDepth = -50;
 
         // Reset the ball's position if it reaches a certain depth
         if (ballBody.getPosition().y < resetDepth) {
             //resetBallPosition();
-        }
+        }*/
+
+        debugRenderer.render(world, camera.combined);
     }
 
     /*private void doPhysicsStep(float deltaTime) {
@@ -341,30 +347,33 @@ class GameScreen implements Screen {
         }
     }*/
 
-    void changeProperties() {
+    /*void changeProperties() {
         // Iterate through the Array<Fixture> returned by getFixtureList()
         for (int i = 0; i < ballBody.getFixtureList().size; i++) {
             // Change the restitution for each fixture
             ballBody.getFixtureList().get(i).setRestitution(0.5f);
             // You can also adjust other properties as needed
         }
-    }
+    }*/
 
     private InputAdapter inputProcessor = new InputAdapter() {
         @Override
         public boolean keyDown(int keycode) {
             if (keycode == Input.Keys.P) {
                 tiltTunnel(true); // Tilt one way
-                changeProperties();
+                //changeProperties();
                 return true;
             } else if (keycode == Input.Keys.O) {
                 tiltTunnel(false); // Tilt the other way
                 return true;
             } else if (keycode == Input.Keys.K) {
-                resetBallPosition();
+                // resetBallPosition();
                 return true;
             } else if (keycode == Input.Keys.L) {
                 isLKeyPressed = true; // Set the flag when L key is pressed
+                return true;
+            } else if (keycode == Input.Keys.ESCAPE) {
+                Gdx.app.exit();
                 return true;
             }
             return false;
@@ -387,6 +396,7 @@ class GameScreen implements Screen {
         world.dispose();
         debugRenderer.dispose();
         font.dispose();
+        ballTexture.dispose();
     }
 
     @Override
