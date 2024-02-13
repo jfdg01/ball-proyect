@@ -3,7 +3,7 @@ package com.mygdx.game;
 public class Constants {
 
     public static final int MAX_FPS = 60;
-    public static final float TIME_STEP = 1 / 120f; // Target physics time step
+    public static final float TIME_STEP = 1 / 1200f; // Target physics time step
     public static final int PHYSICS_STEPS_PER_FRAME = 4; // Number of physics updates per frame
     public static final int VELOCITY_ITERATIONS = 6;
     public static final int POSITION_ITERATIONS = 4;

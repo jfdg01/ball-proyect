@@ -27,7 +27,7 @@ public class MyGdxGame extends Game {
 }
 
 class GameScreen implements Screen {
-    SpriteBatch batch;
+    SpriteBatch spriteBatch;
     World world;
     Texture ballTexture;
     Box2DDebugRenderer debugRenderer;
@@ -157,7 +157,7 @@ class GameScreen implements Screen {
 
         Gdx.input.setInputProcessor(inputProcessor);
 
-        batch = new SpriteBatch();
+        spriteBatch = new SpriteBatch();
         world = new World(new Vector2(0, -10), true);
         world.setContactListener(contactListener = new MyContactListener(this));
         debugRenderer = new Box2DDebugRenderer();
@@ -207,23 +207,23 @@ class GameScreen implements Screen {
 
         camera.update();
         ScreenUtils.clear(0, 0, 0, 1);
-        batch.setProjectionMatrix(hudCamera.combined);
+        spriteBatch.setProjectionMatrix(hudCamera.combined);
 
         if (textAccumulator >= 0.1f) {
             textAccumulator = 0;
             speed = ballBodies.get(fastestBallIndex).getLinearVelocity().len();
         }
 
-        batch.begin();
-        font.draw(batch, "Fastest ball: " + String.format("%.2f", speed) + " m/s", 0, Gdx.graphics.getHeight());
-        font.draw(batch, "Total balls: " + numberOfBalls, 0, Gdx.graphics.getHeight() - 50); // Adjust position as needed
-        font.draw(batch, "Balls created: " + ballsCreated, 0, Gdx.graphics.getHeight() - 100); // Adjust position as needed
-        font.draw(batch, "Balls destroyed: " + ballsDestoyed, 0, Gdx.graphics.getHeight() - 150); // Adjust position as needed
-        batch.end();
+        spriteBatch.begin();
+        font.draw(spriteBatch, "Fastest ball: " + String.format("%.2f", speed) + " m/s", 0, Gdx.graphics.getHeight());
+        font.draw(spriteBatch, "Total balls: " + numberOfBalls, 0, Gdx.graphics.getHeight() - 50); // Adjust position as needed
+        font.draw(spriteBatch, "Balls created: " + ballsCreated, 0, Gdx.graphics.getHeight() - 100); // Adjust position as needed
+        font.draw(spriteBatch, "Balls destroyed: " + ballsDestoyed, 0, Gdx.graphics.getHeight() - 150); // Adjust position as needed
+        spriteBatch.end();
 
         textAccumulator += delta;
 
-        renderBalls(fastestBallIndex);
+        renderBallsWithSprites(fastestBallIndex);
         ballCreation();
         ballDestruction();
     }
@@ -241,7 +241,27 @@ class GameScreen implements Screen {
         return fastestBallIndex;
     }
 
-    private void renderBalls(int fastestBallIndex) {
+    private void renderBallsWithSprites(int fastestBallIndex) {
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        renderCircle();
+        shapeRenderer.end();
+
+        spriteBatch.setProjectionMatrix(camera.combined);
+        spriteBatch.begin();
+
+        for (int i = 0; i < ballBodies.size; i++) {
+            Body ballBody = ballBodies.get(i);
+            float x = ballBody.getPosition().x - ballBody.getFixtureList().first().getShape().getRadius();
+            float y = ballBody.getPosition().y - ballBody.getFixtureList().first().getShape().getRadius();
+            //if fastest change the color to green, else red using a ternary conditional operaor
+            spriteBatch.setColor(i == fastestBallIndex ? Color.GREEN : Color.WHITE);
+
+            spriteBatch.draw(ballTexture, x, y, ballBody.getFixtureList().first().getShape().getRadius() * 2, ballBody.getFixtureList().first().getShape().getRadius() * 2);
+        }
+        spriteBatch.end();
+    }
+    private void renderBallsWithShape(int fastestBallIndex) {
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
 
@@ -292,7 +312,7 @@ class GameScreen implements Screen {
 
     @Override
     public void dispose() {
-        batch.dispose();
+        spriteBatch.dispose();
         world.dispose();
         debugRenderer.dispose();
         font.dispose();
