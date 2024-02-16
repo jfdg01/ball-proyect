@@ -2,15 +2,16 @@ package com.mygdx.game;
 
 import com.badlogic.gdx.*;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.*;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
-import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.graphics.OrthographicCamera;
 
 import static com.mygdx.game.Constants.*;
+import static com.mygdx.game.Constants.PPM;
 
 public class MyGdxGame extends Game {
     private GameScreen mainGameScreen;
@@ -24,18 +25,27 @@ public class MyGdxGame extends Game {
 
 class GameScreen implements Screen {
     SpriteBatch batch;
+    private Array<Body> ballsToRemove = new Array<>();
+    private boolean createBallFlag = false;
+
     World world;
     Box2DDebugRenderer debugRenderer;
     private float accumulator = 0;
     private OrthographicCamera camera;
     private OrthographicCamera hudCamera;
 
-    private Body ballBody;
+    // private Body ballBody;
     private Array<Body> ballBodies = new Array<>();
     private int numberOfBalls = 0;
     private Body floorBody;
     private Body bottomWallBody;
     private Body topWallBody;
+
+    public Body getCircleBody() {
+        return circleBody;
+    }
+
+    private Body circleBody;
     private BitmapFont font;
     private boolean isLKeyPressed = false;
     private float ballCreationCooldown = 0f;
@@ -69,30 +79,29 @@ class GameScreen implements Screen {
         // Create a circle shape and set its radius
         CircleShape circle = new CircleShape();
         float randRadius = (float) Math.random() / 7;
-        circle.setRadius(0.1f + randRadius);
+        circle.setRadius(BALL_RADIUS + randRadius);
 
         // Create a fixture definition using the shape
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = circle;
-        fixtureDef.density = 0.5f;
-        fixtureDef.friction = 0.1f;
-        fixtureDef.restitution = 1.01f; // Make it bounce
+        fixtureDef.density = BALL_DENSITY;
+        fixtureDef.friction = BALL_FRICTION;
+        fixtureDef.restitution = BALL_RESTITUTION; // Make it bounce
 
         // Create the fixture on the body
         ballBody.createFixture(fixtureDef);
         ballBody.setBullet(true);
 
+        ballBody.setUserData("ball");
         ballBodies.add(ballBody);
         numberOfBalls++;
-        if (this.ballBody == null) {
-            this.ballBody = ballBody;
-        }
+        // this.ballBody = ballBodies.get(0);
 
         // Dispose of the shape
         circle.dispose();
     }
 
-    private void createCircle() {
+    public void createCircle() {
         float radius = 5f; // Semi-circle radius in meters
         int segments = 360; // Number of segments to approximate the semi-circle
 
@@ -100,11 +109,8 @@ class GameScreen implements Screen {
 
         // Calculate the vertices of the semi-circle
         for (int i = 0; i < segments; i++) {
-            float angle = (float) i / (segments - 1) * (float) -Math.PI * 2; // from 0 to PI
-            vertices[i] = new Vector2(
-                    radius * (float) Math.cos(angle),
-                    radius * (float) Math.sin(angle)
-            );
+            float angle = (float) i / (segments - 1) * (float) -Math.PI * 2;
+            vertices[i] = new Vector2(radius * (float) Math.cos(angle), radius * (float) Math.sin(angle));
         }
 
         // Create the chain shape for the semi-circle
@@ -116,19 +122,19 @@ class GameScreen implements Screen {
         bodyDef.type = BodyDef.BodyType.StaticBody;
         bodyDef.position.set(4, 3); // Position of the semi-circle's bottom center in the world
 
-        // Create the static body in the world
-        Body body = world.createBody(bodyDef);
+        // Create the static body in the world and assign it to the member variable
+        circleBody = world.createBody(bodyDef);
 
         // Attach the chain shape to the body
         FixtureDef fixtureDef = new FixtureDef();
         fixtureDef.shape = chainShape;
 
-        body.createFixture(fixtureDef);
+        circleBody.createFixture(fixtureDef);
 
         // Remember to dispose of the shape
         chainShape.dispose();
+        circleBody.setUserData("circle");
     }
-
 
     private void createFloor() {
         // Create our body definition
@@ -240,19 +246,17 @@ class GameScreen implements Screen {
         return minLerp + (maxLerp - minLerp) * normalizedSpeed;
     }
 
-    private void resetBallPosition() {
-        if (!ballBody.isAwake())
-            ballBody.setAwake(true);
+    /*private void resetBallPosition() {
+        if (!ballBody.isAwake()) ballBody.setAwake(true);
         ballBody.setTransform(4, 3, 0);
-    }
+    }*/
 
-    private void resetBall() {
-        if (!ballBody.isAwake())
-            ballBody.setAwake(true);
+    /*private void resetBall() {
+        if (!ballBody.isAwake()) ballBody.setAwake(true);
         ballBody.setTransform(4, 3, 0); // Reset position and angle
         ballBody.setLinearVelocity(0, 0); // Reset velocity
         ballBody.setAngularVelocity(0); // Reset angular velocity
-    }
+    }*/
 
     /**
      * Physics simulation functions
@@ -271,21 +275,41 @@ class GameScreen implements Screen {
         world = new World(new Vector2(0, -10), true);
         debugRenderer = new Box2DDebugRenderer();
 
-        createBall();
-        ballBody.setLinearVelocity(0, -50);
+        world.setContactListener(new MyContactListener());
+
         createCircle();
+        createBall();
     }
 
     @Override
     public void render(float delta) {
+        Gdx.app.log("Debug", "Render start");
+
         // Update the accumulator with the frame's delta time
         accumulator += delta;
+
+        if (!ballsToRemove.isEmpty()) {
+            Gdx.app.log("Debug", "Removing balls");
+            for (int i = 0; i < ballsToRemove.size; i++) {
+                world.destroyBody(ballsToRemove.get(i));
+                ballBodies.removeValue(ballsToRemove.get(i), true);
+                numberOfBalls--;
+            }
+            ballsToRemove.clear();
+        }
+
+        if (createBallFlag) {
+            Gdx.app.log("Debug", "Creating a ball");
+            createBall();
+            createBallFlag = false; // Reset the flag
+        }
 
         // Perform multiple physics steps per frame, if enough accumulated time
         if (accumulator >= TIME_STEP) {
             world.step(TIME_STEP, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
             accumulator -= TIME_STEP;
         }
+
 
         // Calculate the lerp factor for smooth camera movement
         /*float lerpFactor = calculateLerpFactor(ballBody.getLinearVelocity().len());
@@ -295,13 +319,13 @@ class GameScreen implements Screen {
         camera.position.x += (ballPosition.x - camera.position.x) * lerpFactor;
         camera.position.y += (ballPosition.y - camera.position.y) * lerpFactor;*/
 
-        if (isLKeyPressed && ballCreationCooldown <= 0) {
+        /*if (isLKeyPressed && ballCreationCooldown <= 0) {
             createBall();
             ballCreationCooldown = ballCreationInterval;
         }
         if (ballCreationCooldown > 0) {
             ballCreationCooldown -= delta;
-        }
+        }*/
 
         // No ball in array goes faster than 200ms
         /*for (int i = 0; i < ballBodies.size; i++) {
@@ -319,17 +343,12 @@ class GameScreen implements Screen {
 
         batch.setProjectionMatrix(hudCamera.combined);
         batch.begin();
-        float speed = ballBody.getLinearVelocity().len();
-        font.draw(batch, "Speed: " + String.format("%.2f", speed) + " m/s", (float) Gdx.graphics.getWidth() / 2 - 80, Gdx.graphics.getHeight() - 20);
+        /*float speed = ballBody.getLinearVelocity().len();
+        font.draw(batch, "Speed: " + String.format("%.2f", speed) + " m/s", (float) Gdx.graphics.getWidth() / 2 - 80, Gdx.graphics.getHeight() - 20);*/
         font.draw(batch, "Balls: " + numberOfBalls, (float) Gdx.graphics.getWidth() / 2 - 50, Gdx.graphics.getHeight() - 40); // Adjust position as needed
         batch.end();
 
-        int resetDepth = -50;
-
-        // Reset the ball's position if it reaches a certain depth
-        if (ballBody.getPosition().y < resetDepth) {
-            //resetBallPosition();
-        }
+        Gdx.app.log("Debug", "Render end");
     }
 
     /*private void doPhysicsStep(float deltaTime) {
@@ -341,27 +360,27 @@ class GameScreen implements Screen {
         }
     }*/
 
-    void changeProperties() {
+    /*void changeProperties() {
         // Iterate through the Array<Fixture> returned by getFixtureList()
         for (int i = 0; i < ballBody.getFixtureList().size; i++) {
             // Change the restitution for each fixture
             ballBody.getFixtureList().get(i).setRestitution(0.5f);
             // You can also adjust other properties as needed
         }
-    }
+    }*/
 
     private InputAdapter inputProcessor = new InputAdapter() {
         @Override
         public boolean keyDown(int keycode) {
             if (keycode == Input.Keys.P) {
                 tiltTunnel(true); // Tilt one way
-                changeProperties();
+                // changeProperties();
                 return true;
             } else if (keycode == Input.Keys.O) {
                 tiltTunnel(false); // Tilt the other way
                 return true;
             } else if (keycode == Input.Keys.K) {
-                resetBallPosition();
+                // resetBallPosition();
                 return true;
             } else if (keycode == Input.Keys.L) {
                 isLKeyPressed = true; // Set the flag when L key is pressed
@@ -419,4 +438,47 @@ class GameScreen implements Screen {
     @Override
     public void hide() {
     }
+
+    private class MyContactListener implements ContactListener {
+
+        @Override
+        public void beginContact(Contact contact) {
+            Body bodyA = contact.getFixtureA().getBody();
+            Body bodyB = contact.getFixtureB().getBody();
+
+            // Check for collision between a ball and the circle
+            if ((bodyA.getUserData() instanceof String && bodyA.getUserData().equals("circle") && bodyB.getUserData() instanceof String && bodyB.getUserData().equals("ball")) || (bodyB.getUserData() instanceof String && bodyB.getUserData().equals("circle") && bodyA.getUserData() instanceof String && bodyA.getUserData().equals("ball"))) {
+                // Flag that a ball should be created
+                createBallFlag = true;
+                Gdx.app.log("Contact", "Ball collision");
+            }
+            // Check if both bodies are balls
+            if ((bodyA.getUserData() instanceof String && bodyA.getUserData().equals("ball")) && (bodyB.getUserData() instanceof String && bodyB.getUserData().equals("ball"))) {
+                // Add one of the balls to the removal list randomly
+                if (Math.random() > 0.5) {
+                    ballsToRemove.add(bodyA);
+                } else {
+                    ballsToRemove.add(bodyB);
+                }
+                Gdx.app.log("Contact", "Ball collision");
+            }
+        }
+
+
+        @Override
+        public void endContact(Contact contact) {
+            // Handle end of contact if necessary
+        }
+
+        @Override
+        public void preSolve(Contact contact, Manifold oldManifold) {
+            // Optional: handle collision before it's resolved
+        }
+
+        @Override
+        public void postSolve(Contact contact, ContactImpulse impulse) {
+            // Optional: handle results of collision, such as impact force
+        }
+    }
+
 }
