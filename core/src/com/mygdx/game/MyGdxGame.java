@@ -1,16 +1,16 @@
 package com.mygdx.game;
 
 import com.badlogic.gdx.*;
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.physics.box2d.*;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.GdxRuntimeException;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.math.Vector2;
-import com.badlogic.gdx.graphics.OrthographicCamera;
 
 import java.util.Iterator;
 
@@ -50,7 +50,6 @@ class GameScreen implements Screen {
     int ballsDestoyed = 0;
     int newBalls = 0;
     int oldBalls = 0;
-
     public void initializeCameras() {
         float viewportWidth = Gdx.graphics.getWidth() / PPM;
         float viewportHeight = Gdx.graphics.getHeight() / PPM;
@@ -143,6 +142,43 @@ class GameScreen implements Screen {
         chainShape.dispose();
     }
 
+    private Mesh fullScreenQuad;
+
+    public Mesh createFullScreenQuad() {
+        float[] verts = new float[20];
+        int i = 0;
+
+        verts[i++] = -1; // x1
+        verts[i++] = -1; // y1
+        verts[i++] = 0;
+        verts[i++] = 0f; // u1
+        verts[i++] = 0f; // v1
+
+        verts[i++] = 1f; // x2
+        verts[i++] = -1; // y2
+        verts[i++] = 0;
+        verts[i++] = 1f; // u2
+        verts[i++] = 0f; // v2
+
+        verts[i++] = 1f; // x3
+        verts[i++] = 1f; // y3
+        verts[i++] = 0;
+        verts[i++] = 1f; // u3
+        verts[i++] = 1f; // v3
+
+        verts[i++] = -1; // x4
+        verts[i++] = 1f; // y4
+        verts[i++] = 0;
+        verts[i++] = 0f; // u4
+        verts[i++] = 1f; // v4
+
+        Mesh mesh = new Mesh( true, 4, 0,  // static mesh with 4 vertices and no indices
+                new VertexAttribute( VertexAttributes.Usage.Position, 3, ShaderProgram.POSITION_ATTRIBUTE ),
+                new VertexAttribute( VertexAttributes.Usage.TextureCoordinates, 2, ShaderProgram.TEXCOORD_ATTRIBUTE+"0" ) );
+
+        mesh.setVertices( verts );
+        return mesh;
+    }
 
     public GameScreen() {
 
@@ -150,7 +186,8 @@ class GameScreen implements Screen {
         font.setColor(Color.WHITE);
         font.getData().setScale(3);
 
-        // Load the internal asset png into the ballTexture variable
+        fullScreenQuad = createFullScreenQuad();
+
         ballTexture = new Texture(Gdx.files.internal("ball.png"));
 
         initializeCameras();
@@ -261,6 +298,7 @@ class GameScreen implements Screen {
         }
         spriteBatch.end();
     }
+
     private void renderBallsWithShape(int fastestBallIndex) {
         shapeRenderer.setProjectionMatrix(camera.combined);
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
@@ -318,6 +356,7 @@ class GameScreen implements Screen {
         font.dispose();
         ballTexture.dispose();
         shapeRenderer.dispose();
+        fullScreenQuad.dispose();
     }
 
     @Override
@@ -397,8 +436,7 @@ class GameScreen implements Screen {
             Object fixtureBName = fixtureB.getBody().getUserData();
 
             // Ball-Circle Collision: Queue new ball creation
-            if (("Ball".equals(fixtureAName) && "Circle".equals(fixtureBName)) ||
-                    ("Circle".equals(fixtureAName) && "Ball".equals(fixtureBName))) {
+            if (("Ball".equals(fixtureAName) && "Circle".equals(fixtureBName)) || ("Circle".equals(fixtureAName) && "Ball".equals(fixtureBName))) {
                 gameScreen.handleBallCreation(1);
             }
 
