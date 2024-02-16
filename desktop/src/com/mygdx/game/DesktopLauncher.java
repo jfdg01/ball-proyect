@@ -11,7 +11,6 @@ public class DesktopLauncher {
 	public static void main (String[] arg) {
 		Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
 		config.setForegroundFPS(MAX_FPS);
-		config.setWindowedMode(WIDTH,HEIGHT);
 		config.setTitle("BallBounce");
 		new Lwjgl3Application(new MyGdxGame(), config);
 	}
